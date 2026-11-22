@@ -6,6 +6,8 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.user import User, UserRole
 from app.models.department import Department
+from app.models.category import Category
+from app.models.location import CampusLocation
 
 
 # Default demo password for local development environments
@@ -31,6 +33,54 @@ DEMO_DEPARTMENTS = [
         "department_name": "Academic Affairs",
         "department_code": "ACAD",
         "description": "Classroom equipment, lecture halls, and academic amenities",
+    },
+]
+
+DEMO_CATEGORIES = [
+    {"category_name": "Internet & Wi-Fi", "department_code": "IT", "description": "Campus Wi-Fi, Ethernet, and connectivity issues"},
+    {"category_name": "Lab Computers & Workstations", "department_code": "IT", "description": "Lab hardware, PC peripherals, and operating systems"},
+    {"category_name": "Software & Campus Portal", "department_code": "IT", "description": "Student portal, email, and campus software licenses"},
+    {"category_name": "Plumbing & Restroom", "department_code": "ESTATE", "description": "Water leaks, washroom fittings, and drainage"},
+    {"category_name": "Furniture & Carpentry", "department_code": "ESTATE", "description": "Broken desks, chairs, doors, and window latches"},
+    {"category_name": "Housekeeping & Cleaning", "department_code": "ESTATE", "description": "Waste disposal, sanitation, and cleanliness"},
+    {"category_name": "Lighting & Electrical Supply", "department_code": "ELEC", "description": "Bulbs, tubes, fans, wall sockets, and tripping breakers"},
+    {"category_name": "Air Conditioning & HVAC", "department_code": "ELEC", "description": "Classroom and lab AC cooling failures"},
+    {"category_name": "Projector & Smart Board", "department_code": "ACAD", "description": "Classroom projectors, screens, and podium systems"},
+    {"category_name": "Audio & Microphone", "department_code": "ACAD", "description": "Microphones, speakers, and PA systems in lecture halls"},
+]
+
+DEMO_LOCATIONS = [
+    {
+        "qr_code_identifier": "QR-TECH-LAB101",
+        "building": "Tech Tower",
+        "room_number": "Lab 101",
+        "floor": "1st Floor",
+        "location_name": "Computer Science Lab 101",
+        "department_code": "IT",
+    },
+    {
+        "qr_code_identifier": "QR-ACAD-302",
+        "building": "Academic Block A",
+        "room_number": "302",
+        "floor": "3rd Floor",
+        "location_name": "Smart Classroom 302",
+        "department_code": "ACAD",
+    },
+    {
+        "qr_code_identifier": "QR-ELEC-PWR2",
+        "building": "Utility Block",
+        "room_number": "PWR-02",
+        "floor": "Ground Floor",
+        "location_name": "Main Substation & UPS Room",
+        "department_code": "ELEC",
+    },
+    {
+        "qr_code_identifier": "QR-EST-REST1",
+        "building": "Central Library",
+        "room_number": "G-05",
+        "floor": "Ground Floor",
+        "location_name": "Library Ground Restroom Facility",
+        "department_code": "ESTATE",
     },
 ]
 
@@ -89,6 +139,10 @@ def seed_database(force: bool = False) -> dict:
     db = SessionLocal()
     created_departments = []
     skipped_departments = []
+    created_categories = []
+    skipped_categories = []
+    created_locations = []
+    skipped_locations = []
     created_users = []
     skipped_users = []
 
@@ -116,7 +170,51 @@ def seed_database(force: bool = False) -> dict:
                 created_departments.append(new_dept.department_code)
                 dept_lookup[new_dept.department_code] = new_dept.id
 
-        # 2. Seed Demo Users (idempotent)
+        # 2. Seed Categories (idempotent)
+        for cat_data in DEMO_CATEGORIES:
+            dept_id = dept_lookup.get(cat_data["department_code"])
+            existing_cat = db.scalar(
+                select(Category).where(
+                    Category.category_name == cat_data["category_name"],
+                    Category.department_id == dept_id,
+                )
+            )
+            if existing_cat:
+                skipped_categories.append(existing_cat.category_name)
+            else:
+                new_cat = Category(
+                    category_name=cat_data["category_name"],
+                    description=cat_data["description"],
+                    department_id=dept_id,
+                    is_active=True,
+                )
+                db.add(new_cat)
+                created_categories.append(cat_data["category_name"])
+
+        # 3. Seed Campus Locations / QR Codes (idempotent)
+        for loc_data in DEMO_LOCATIONS:
+            existing_loc = db.scalar(
+                select(CampusLocation).where(
+                    CampusLocation.qr_code_identifier == loc_data["qr_code_identifier"]
+                )
+            )
+            if existing_loc:
+                skipped_locations.append(existing_loc.qr_code_identifier)
+            else:
+                dept_id = dept_lookup.get(loc_data.get("department_code"))
+                new_loc = CampusLocation(
+                    qr_code_identifier=loc_data["qr_code_identifier"],
+                    building=loc_data["building"],
+                    room_number=loc_data["room_number"],
+                    floor=loc_data.get("floor"),
+                    location_name=loc_data["location_name"],
+                    department_id=dept_id,
+                    is_active=True,
+                )
+                db.add(new_loc)
+                created_locations.append(loc_data["qr_code_identifier"])
+
+        # 4. Seed Demo Users (idempotent)
         for user_data in DEMO_USERS:
             existing_user = db.scalar(
                 select(User).where(User.email == user_data["email"])
@@ -146,6 +244,10 @@ def seed_database(force: bool = False) -> dict:
             "status": "success",
             "created_departments": created_departments,
             "skipped_departments": skipped_departments,
+            "created_categories": created_categories,
+            "skipped_categories": skipped_categories,
+            "created_locations": created_locations,
+            "skipped_locations": skipped_locations,
             "created_users": created_users,
             "skipped_users": skipped_users,
         }

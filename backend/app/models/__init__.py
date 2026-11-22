@@ -7,6 +7,7 @@ from app.models.history import TicketHistory
 from app.models.attachment import Attachment
 from app.models.notification import Notification
 from app.models.knowledge_base import KnowledgeBase
+from app.models.location import CampusLocation
 
 __all__ = [
     "User",
@@ -21,4 +22,5 @@ __all__ = [
     "Attachment",
     "Notification",
     "KnowledgeBase",
+    "CampusLocation",
 ]
