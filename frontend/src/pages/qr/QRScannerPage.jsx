@@ -59,10 +59,11 @@ const QRScannerPage = () => {
   };
 
   const handleProceedToReport = (loc) => {
+    const code = loc.qr_code_identifier || loc.qr_code;
     const params = new URLSearchParams({
       building: loc.building,
       room_number: loc.room_number,
-      qr_identifier: loc.qr_code,
+      qr_identifier: code,
     });
     if (loc.department_id) {
       params.append('department_id', loc.department_id.toString());
@@ -129,7 +130,7 @@ const QRScannerPage = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-100">
-                  {resolvedLocation.qr_code}
+                  {resolvedLocation.qr_code_identifier || resolvedLocation.qr_code}
                 </span>
                 <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
@@ -139,7 +140,7 @@ const QRScannerPage = () => {
               <h4 className="text-base font-black text-slate-900">
                 {resolvedLocation.building} — Room {resolvedLocation.room_number}
               </h4>
-              <p className="text-xs text-slate-500">{resolvedLocation.description}</p>
+              <p className="text-xs text-slate-500">{resolvedLocation.description || resolvedLocation.location_name}</p>
             </div>
 
             <button
@@ -168,13 +169,13 @@ const QRScannerPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             {locations.map((loc) => (
               <div
-                key={loc.qr_code}
+                key={loc.qr_code_identifier || loc.qr_code || loc.id}
                 className="p-5 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-sm transition bg-white flex flex-col justify-between gap-4"
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-mono text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                      {loc.qr_code}
+                      {loc.qr_code_identifier || loc.qr_code}
                     </span>
                     <span className="text-[11px] text-slate-400">
                       ID #{loc.id}
@@ -185,13 +186,13 @@ const QRScannerPage = () => {
                     {loc.building} — Room {loc.room_number}
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                    {loc.description || 'Campus academic lecture hall / facility'}
+                    {loc.description || loc.location_name || 'Campus academic lecture hall / facility'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                   <button
-                    onClick={() => handleLookupCode(loc.qr_code)}
+                    onClick={() => handleLookupCode(loc.qr_code_identifier || loc.qr_code)}
                     className="flex-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
                   >
                     Inspect QR

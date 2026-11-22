@@ -89,7 +89,7 @@ const TicketCreatePage = () => {
   const handleSelectLocation = (loc) => {
     setBuilding(loc.building);
     setRoomNumber(loc.room_number);
-    setQrIdentifier(loc.qr_code);
+    setQrIdentifier(loc.qr_code_identifier || loc.qr_code);
     if (loc.department_id) {
       setDepartmentId(loc.department_id.toString());
     }
@@ -147,14 +147,19 @@ const TicketCreatePage = () => {
     setError('');
 
     try {
+      const buildingStr = building.trim() || 'Main Campus';
+      const roomStr = roomNumber.trim();
+      const locationStr = roomStr ? `${buildingStr} - Room ${roomStr}` : buildingStr;
+
       const payload = {
         title: title.trim(),
         description: description.trim(),
         department_id: parseInt(departmentId, 10),
         category_id: parseInt(categoryId, 10),
-        building: building.trim() || 'Main Campus',
-        room_number: roomNumber.trim() || null,
-        qr_identifier: qrIdentifier.trim() || null,
+        location: locationStr,
+        building: buildingStr,
+        room_number: roomStr || null,
+        qr_code_identifier: qrIdentifier.trim() || null,
         priority: priority,
       };
 
@@ -412,16 +417,19 @@ const TicketCreatePage = () => {
           {locations.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               <span className="text-[11px] font-bold text-slate-400 self-center">Presets:</span>
-              {locations.map((loc) => (
-                <button
-                  type="button"
-                  key={loc.qr_code}
-                  onClick={() => handleSelectLocation(loc)}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 transition"
-                >
-                  📍 {loc.building} - {loc.room_number} ({loc.qr_code})
-                </button>
-              ))}
+              {locations.map((loc) => {
+                const code = loc.qr_code_identifier || loc.qr_code;
+                return (
+                  <button
+                    type="button"
+                    key={code || loc.id}
+                    onClick={() => handleSelectLocation(loc)}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 transition"
+                  >
+                    📍 {loc.building} - {loc.room_number} ({code})
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

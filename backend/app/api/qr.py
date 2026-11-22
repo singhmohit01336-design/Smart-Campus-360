@@ -26,6 +26,46 @@ router = APIRouter(
 
 
 @router.get(
+    "/locations",
+    response_model=list[CampusLocationResponse],
+)
+def list_campus_locations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    List all registered and active campus locations with QR codes for quick reporting.
+    """
+    locations = (
+        db.scalars(
+            select(CampusLocation)
+            .where(CampusLocation.is_active == True)
+            .order_by(CampusLocation.building.asc(), CampusLocation.room_number.asc())
+        )
+        .unique()
+        .all()
+    )
+
+    results = []
+    for loc in locations:
+        dept_name = loc.department.department_name if loc.department else None
+        results.append(
+            CampusLocationResponse(
+                id=loc.id,
+                qr_code_identifier=loc.qr_code_identifier,
+                building=loc.building,
+                room_number=loc.room_number,
+                floor=loc.floor,
+                location_name=loc.location_name,
+                department_id=loc.department_id,
+                department_name=dept_name,
+                is_active=loc.is_active,
+            )
+        )
+    return results
+
+
+@router.get(
     "/{qr_code_identifier}",
     response_model=CampusLocationResponse,
 )

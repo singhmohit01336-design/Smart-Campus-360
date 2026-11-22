@@ -44,8 +44,12 @@ const SlaMonitorPage = () => {
   const handleRunSweep = async () => {
     setChecking(true);
     try {
-      const res = await api.post('/sla/check-deadlines');
-      setBannerMessage(res.data.message || 'SLA verification cycle complete');
+      const res = await api.post('/sla/check');
+      const evaluated = res.data.evaluated_tickets ?? 0;
+      const overdue = res.data.overdue_detected ?? 0;
+      setBannerMessage(
+        `SLA verification cycle complete: ${evaluated} active tickets evaluated, ${overdue} overdue detected.`
+      );
       await fetchSlaData();
       setTimeout(() => setBannerMessage(''), 5000);
     } catch (err) {
@@ -103,20 +107,28 @@ const SlaMonitorPage = () => {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Within SLA Target</span>
-          <p className="text-2xl font-black text-emerald-600 mt-1">{stats?.within_sla_count ?? 0}</p>
+          <p className="text-2xl font-black text-emerald-600 mt-1">
+            {stats?.on_time_tickets ?? stats?.within_sla_count ?? 0}
+          </p>
           <span className="text-[11px] text-slate-400">On schedule</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Breached Overdue</span>
-          <p className="text-2xl font-black text-rose-600 mt-1">{stats?.overdue_count ?? 0}</p>
+          <p className="text-2xl font-black text-rose-600 mt-1">
+            {stats?.overdue_tickets ?? stats?.overdue_count ?? 0}
+          </p>
           <span className="text-[11px] text-slate-400">Past target SLA</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Compliance Index</span>
           <p className="text-2xl font-black text-indigo-600 mt-1">
-            {stats?.sla_compliance_rate_pct != null ? `${stats.sla_compliance_rate_pct}%` : '100%'}
+            {stats?.sla_compliance_rate != null
+              ? `${stats.sla_compliance_rate}%`
+              : stats?.sla_compliance_rate_pct != null
+              ? `${stats.sla_compliance_rate_pct}%`
+              : '100%'}
           </p>
           <span className="text-[11px] text-slate-400">Target: ≥ 95%</span>
         </div>

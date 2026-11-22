@@ -51,7 +51,8 @@ const KnowledgeBasePage = () => {
         }),
       ]);
       setCategories(catRes.data || []);
-      setArticles(artRes.data || []);
+      const items = artRes.data?.items ?? (Array.isArray(artRes.data) ? artRes.data : []);
+      setArticles(items);
     } catch (err) {
       console.error('Failed to load KB data', err);
     } finally {

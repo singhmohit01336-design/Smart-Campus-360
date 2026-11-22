@@ -59,6 +59,13 @@ def ticket_test_context(db_session):
         role=UserRole.ADMIN.value,
         is_active=True,
     )
+    superadmin_e = User(
+        full_name=f"Superadmin E {uid}",
+        email=f"superadmin_e_{uid}@example.com",
+        hashed_password="hash",
+        role=UserRole.SUPERADMIN.value,
+        is_active=True,
+    )
     inactive_tech = User(
         full_name=f"Inactive Tech {uid}",
         email=f"inactive_tech_{uid}@example.com",
@@ -66,7 +73,7 @@ def ticket_test_context(db_session):
         role=UserRole.TECHNICIAN.value,
         is_active=False,
     )
-    db_session.add_all([student_a, faculty_b, technician_c, admin_d, inactive_tech])
+    db_session.add_all([student_a, faculty_b, technician_c, admin_d, superadmin_e, inactive_tech])
     db_session.commit()
 
     def token_for(user: User):
@@ -80,11 +87,13 @@ def ticket_test_context(db_session):
         "faculty_b": faculty_b,
         "technician_c": technician_c,
         "admin_d": admin_d,
+        "superadmin_e": superadmin_e,
         "inactive_tech": inactive_tech,
         "h_student_a": token_for(student_a),
         "h_faculty_b": token_for(faculty_b),
         "h_tech_c": token_for(technician_c),
         "h_admin_d": token_for(admin_d),
+        "h_superadmin_e": token_for(superadmin_e),
         "uid": uid,
     }
     yield ctx
@@ -96,7 +105,7 @@ def ticket_test_context(db_session):
         db_session.delete(t)
     db_session.commit()
 
-    for u in [student_a, faculty_b, technician_c, admin_d, inactive_tech]:
+    for u in [student_a, faculty_b, technician_c, admin_d, superadmin_e, inactive_tech]:
         user_obj = db_session.get(User, u.id)
         if user_obj:
             db_session.delete(user_obj)
@@ -421,3 +430,53 @@ def test_ticket_status_workflow_transitions(client, ticket_test_context):
     assert hist_resp.status_code == 200
     history_entries = hist_resp.json()
     assert len(history_entries) >= 5
+
+
+def test_technician_ticket_creation_forbidden(client, ticket_test_context):
+    """
+    Phase 9.0 Regression Test:
+    - Technician ticket creation returns 403 Forbidden.
+    - Student ticket creation remains successful (201).
+    - Faculty ticket creation remains successful (201).
+    - Admin ticket creation remains successful (201).
+    - Superadmin ticket creation remains successful (201).
+    """
+    ctx = ticket_test_context
+
+    base_payload = {
+        "title": "Air conditioning unit malfunction in Lab 204",
+        "description": "Temperature is excessively high and causing server thermal alarms.",
+        "category_id": ctx["cat"].id,
+        "department_id": ctx["dept"].id,
+        "location": "Server Lab 204",
+        "priority": "high",
+    }
+
+    # 1. Technician attempting ticket creation MUST be rejected with 403 Forbidden
+    tech_resp = client.post("/tickets/", json=base_payload, headers=ctx["h_tech_c"])
+    assert tech_resp.status_code == 403
+    assert "insufficient permissions" in tech_resp.json()["detail"].lower()
+
+    # 2. Student ticket creation remains successful -> 201 Created
+    student_payload = {**base_payload, "title": "Student - AC malfunction in Lab 204"}
+    student_resp = client.post("/tickets/", json=student_payload, headers=ctx["h_student_a"])
+    assert student_resp.status_code == 201
+    assert student_resp.json()["status"] == "submitted"
+
+    # 3. Faculty ticket creation remains successful -> 201 Created
+    faculty_payload = {**base_payload, "title": "Faculty - AC malfunction in Lab 204"}
+    faculty_resp = client.post("/tickets/", json=faculty_payload, headers=ctx["h_faculty_b"])
+    assert faculty_resp.status_code == 201
+    assert faculty_resp.json()["status"] == "submitted"
+
+    # 4. Admin ticket creation remains successful -> 201 Created
+    admin_payload = {**base_payload, "title": "Admin - AC malfunction in Lab 204"}
+    admin_resp = client.post("/tickets/", json=admin_payload, headers=ctx["h_admin_d"])
+    assert admin_resp.status_code == 201
+    assert admin_resp.json()["status"] == "submitted"
+
+    # 5. Superadmin ticket creation remains successful -> 201 Created
+    superadmin_payload = {**base_payload, "title": "Superadmin - AC malfunction in Lab 204"}
+    superadmin_resp = client.post("/tickets/", json=superadmin_payload, headers=ctx["h_superadmin_e"])
+    assert superadmin_resp.status_code == 201
+    assert superadmin_resp.json()["status"] == "submitted"

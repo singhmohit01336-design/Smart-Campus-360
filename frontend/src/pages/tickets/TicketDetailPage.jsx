@@ -43,8 +43,12 @@ const TicketDetailPage = () => {
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   // Attachment state
+  const [attachments, setAttachments] = useState([]);
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // History state
+  const [history, setHistory] = useState([]);
 
   // Workflow actions
   const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -58,14 +62,42 @@ const TicketDetailPage = () => {
   const [selectedTechId, setSelectedTechId] = useState('');
 
   const role = (user?.role || '').toLowerCase();
-  const canSeeInternalNotes = ['faculty', 'technician', 'admin', 'superadmin'].includes(role);
+  // Technicians, Admins, and Superadmins can access internal notes; Faculty and Students cannot
+  const canSeeInternalNotes = ['technician', 'admin', 'superadmin'].includes(role);
   const isAdmin = ['admin', 'superadmin'].includes(role);
 
   const fetchTicketDetails = async () => {
     try {
-      const res = await api.get(`/tickets/${id}`);
-      setTicket(res.data);
-      setComments(res.data.comments || []);
+      const [ticketRes, commentsRes, attachmentsRes, historyRes] = await Promise.allSettled([
+        api.get(`/tickets/${id}`),
+        api.get(`/tickets/${id}/comments/`),
+        api.get(`/tickets/${id}/attachments/`),
+        api.get(`/tickets/${id}/history`),
+      ]);
+
+      if (ticketRes.status === 'fulfilled') {
+        setTicket(ticketRes.value.data);
+      } else {
+        throw ticketRes.reason;
+      }
+
+      if (commentsRes.status === 'fulfilled') {
+        setComments(commentsRes.value.data || []);
+      } else {
+        setComments([]);
+      }
+
+      if (attachmentsRes.status === 'fulfilled') {
+        setAttachments(attachmentsRes.value.data || []);
+      } else {
+        setAttachments([]);
+      }
+
+      if (historyRes.status === 'fulfilled') {
+        setHistory(historyRes.value.data || []);
+      } else {
+        setHistory([]);
+      }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.detail || 'Failed to load ticket details.');
@@ -95,7 +127,7 @@ const TicketDetailPage = () => {
     setCommentSubmitting(true);
     try {
       const res = await api.post(`/tickets/${id}/comments/`, {
-        content: newComment.trim(),
+        comment: newComment.trim(),
         is_internal: isInternal,
       });
       setComments((prev) => [...prev, res.data]);
@@ -138,7 +170,7 @@ const TicketDetailPage = () => {
     try {
       await api.patch(`/tickets/${id}/status`, {
         status: targetStatus,
-        resolution_notes: resolutionNotes || undefined,
+        remarks: resolutionNotes || undefined,
       });
       setStatusModalOpen(false);
       setTargetStatus('');
@@ -157,7 +189,7 @@ const TicketDetailPage = () => {
     setActionLoading(true);
     try {
       await api.patch(`/tickets/${id}/assign`, {
-        assigned_to_id: parseInt(selectedTechId, 10),
+        technician_id: parseInt(selectedTechId, 10),
       });
       setAssignModalOpen(false);
       await fetchTicketDetails();
@@ -409,7 +441,9 @@ const TicketDetailPage = () => {
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">User #{c.user_id}</span>
+                        <span className="font-bold text-slate-900">
+                          {c.author_name || (c.user_id ? `User #${c.user_id}` : 'User')}
+                        </span>
                         {c.is_internal && (
                           <span className="inline-flex items-center gap-1 bg-amber-200/60 text-amber-900 px-2 py-0.5 rounded-full text-[10px] font-bold">
                             <Lock className="w-3 h-3" />
@@ -421,7 +455,7 @@ const TicketDetailPage = () => {
                         {new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="whitespace-pre-line leading-relaxed">{c.content}</p>
+                    <p className="whitespace-pre-line leading-relaxed">{c.comment || c.content}</p>
                   </div>
                 ))
               )}
@@ -468,25 +502,33 @@ const TicketDetailPage = () => {
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
             <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
               <Paperclip className="w-4 h-4 text-indigo-600" />
-              <span>Evidence & Attachments ({ticket.attachments?.length || 0})</span>
+              <span>Evidence & Attachments ({attachments.length})</span>
             </h3>
 
             {/* Existing Attachments */}
-            {ticket.attachments?.length > 0 ? (
+            {attachments.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                {ticket.attachments.map((att) => (
+                {attachments.map((att) => (
                   <div
                     key={att.id}
                     className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-2 text-xs"
                   >
                     <div className="truncate">
-                      <p className="font-bold text-slate-800 truncate">{att.filename}</p>
+                      <p className="font-bold text-slate-800 truncate">
+                        {att.original_filename || att.filename}
+                      </p>
                       <span className="text-[11px] text-slate-400">
-                        {(att.file_size / 1024).toFixed(1)} KB
+                        {((att.file_size || 0) / 1024).toFixed(1)} KB
                       </span>
                     </div>
                     <a
-                      href={`http://localhost:8000/tickets/${ticket.id}/attachments/${att.id}/download`}
+                      href={
+                        att.download_url
+                          ? (att.download_url.startsWith('http')
+                              ? att.download_url
+                              : `http://localhost:8000${att.download_url}`)
+                          : `http://localhost:8000/tickets/${ticket.id}/attachments/${att.id}/download`
+                      }
                       download
                       target="_blank"
                       rel="noreferrer"
@@ -530,7 +572,7 @@ const TicketDetailPage = () => {
             </h3>
 
             <div className="relative pl-6 space-y-5 border-l-2 border-slate-200">
-              {(ticket.history || []).map((h) => (
+              {(history || []).map((h) => (
                 <div key={h.id} className="relative">
                   {/* Dot */}
                   <div className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-indigo-600" />
@@ -538,14 +580,15 @@ const TicketDetailPage = () => {
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-xs font-bold text-slate-800 capitalize">
                         {h.new_status ? `Status: ${h.new_status}` : 'Action logged'}
+                        {h.changed_by_name ? ` by ${h.changed_by_name}` : ''}
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400 block">
                       {new Date(h.created_at).toLocaleString()}
                     </span>
-                    {h.comment && (
+                    {(h.remarks || h.comment) && (
                       <p className="text-xs text-slate-600 mt-1 bg-slate-50 p-2 rounded-lg">
-                        {h.comment}
+                        {h.remarks || h.comment}
                       </p>
                     )}
                   </div>

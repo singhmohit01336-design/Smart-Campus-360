@@ -45,13 +45,22 @@ const PRIORITY_COLORS = {
 
 const AnalyticsPage = () => {
   const [data, setData] = useState(null);
+  const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const res = await api.get('/analytics/dashboard');
-        setData(res.data);
+        const [summaryRes, techRes] = await Promise.allSettled([
+          api.get('/analytics/summary'),
+          api.get('/technicians/'),
+        ]);
+        if (summaryRes.status === 'fulfilled') {
+          setData(summaryRes.value.data);
+        }
+        if (techRes.status === 'fulfilled') {
+          setTechnicians(techRes.value.data || []);
+        }
       } catch (err) {
         console.error('Failed to load analytics', err);
       } finally {
@@ -70,27 +79,27 @@ const AnalyticsPage = () => {
     return <p className="text-center py-12 text-slate-500">Analytics unavailable.</p>;
   }
 
-  // Format Status for Pie Chart
-  const statusChartData = Object.entries(data.tickets_by_status || {}).map(([key, val]) => ({
-    name: key.replace('_', ' ').toUpperCase(),
-    value: val,
-    color: STATUS_COLORS[key] || '#94a3b8',
+  // Format Status for Pie Chart: backend returns list of StatusMetric [{ status, count }]
+  const statusChartData = (data.tickets_by_status || []).map((s) => ({
+    name: (s.status || '').replace('_', ' ').toUpperCase(),
+    value: s.count,
+    color: STATUS_COLORS[s.status] || '#94a3b8',
   }));
 
-  // Format Priority for Bar Chart
-  const priorityChartData = Object.entries(data.tickets_by_priority || {}).map(([key, val]) => ({
-    name: key.toUpperCase(),
-    count: val,
-    color: PRIORITY_COLORS[key] || '#94a3b8',
+  // Format Priority for Bar Chart: backend returns list of PriorityMetric [{ priority, count }]
+  const priorityChartData = (data.tickets_by_priority || []).map((p) => ({
+    name: (p.priority || '').toUpperCase(),
+    count: p.count,
+    color: PRIORITY_COLORS[p.priority] || '#94a3b8',
   }));
 
-  // Daily volume
-  const dailyData = (data.daily_volume || []).map((d) => ({
+  // Daily volume: backend returns list of TrendPoint [{ date, count }]
+  const dailyData = (data.ticket_trends_daily || []).map((d) => ({
     date: new Date(d.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
     count: d.count,
   }));
 
-  // Department distribution
+  // Department distribution: backend returns list of DepartmentMetric [{ department_id, department_name, count }]
   const deptData = (data.tickets_by_department || []).map((d) => ({
     name: d.department_name,
     count: d.count,
@@ -134,9 +143,11 @@ const AnalyticsPage = () => {
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-emerald-600">{data.resolution_rate_pct}%</p>
+          <p className="text-2xl font-black text-emerald-600">
+            {data.resolution_rate_percent ?? data.resolution_rate_pct ?? 0}%
+          </p>
           <span className="text-[11px] text-slate-400 mt-1 block">
-            {data.resolved_tickets + data.closed_tickets} resolved of {data.total_tickets}
+            {data.resolved_tickets} resolved of {data.total_tickets}
           </span>
         </div>
 
@@ -147,7 +158,9 @@ const AnalyticsPage = () => {
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-purple-600">{data.sla_compliance_rate_pct}%</p>
+          <p className="text-2xl font-black text-purple-600">
+            {data.sla_compliance_rate_percent ?? data.sla_compliance_rate_pct ?? 100}%
+          </p>
           <span className="text-[11px] text-slate-400 mt-1 block">Within targeted response window</span>
         </div>
 
@@ -297,41 +310,39 @@ const AnalyticsPage = () => {
               <tr>
                 <th className="py-3 px-5">Technician</th>
                 <th className="py-3 px-5">Email</th>
-                <th className="py-3 px-5 text-center">Active Workload</th>
-                <th className="py-3 px-5 text-center">Resolved Tickets</th>
-                <th className="py-3 px-5 text-right">Throughput</th>
+                <th className="py-3 px-5 text-center">Institutional ID</th>
+                <th className="py-3 px-5 text-center">Status</th>
+                <th className="py-3 px-5 text-right">Fleet Role</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(data.technician_performance || []).length === 0 ? (
+              {technicians.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
-                    No technician metrics recorded yet.
+                    No active technicians currently listed.
                   </td>
                 </tr>
               ) : (
-                data.technician_performance.map((tech) => (
-                  <tr key={tech.technician_id} className="hover:bg-slate-50 transition">
+                technicians.map((tech) => (
+                  <tr key={tech.id} className="hover:bg-slate-50 transition">
                     <td className="py-3.5 px-5 font-bold text-slate-800">
-                      {tech.technician_name}
+                      {tech.full_name}
                     </td>
                     <td className="py-3.5 px-5 text-xs text-slate-500">
                       {tech.email}
                     </td>
                     <td className="py-3.5 px-5 text-center">
-                      <span className="font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full text-xs">
-                        {tech.assigned_count} Active
+                      <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">
+                        {tech.institutional_id || `TECH-${tech.id}`}
                       </span>
                     </td>
                     <td className="py-3.5 px-5 text-center">
                       <span className="font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full text-xs">
-                        {tech.resolved_count} Done
+                        Active Dispatch
                       </span>
                     </td>
-                    <td className="py-3.5 px-5 text-right font-mono text-xs font-bold text-indigo-600">
-                      {tech.assigned_count + tech.resolved_count > 0
-                        ? `${Math.round((tech.resolved_count / (tech.assigned_count + tech.resolved_count)) * 100)}%`
-                        : '0%'}
+                    <td className="py-3.5 px-5 text-right font-mono text-xs font-bold text-slate-600">
+                      Campus Maintenance
                     </td>
                   </tr>
                 ))

@@ -132,42 +132,42 @@ const Login = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => handleDemoFill('2024CS001', 'Student')}
+                onClick={() => handleDemoFill('student@smartcampus360.edu', 'Student')}
                 className="p-2 text-left rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition font-medium text-slate-700"
               >
-                🎓 Student <span className="block text-[10px] text-slate-400">2024CS001</span>
+                🎓 Student <span className="block text-[10px] text-slate-400">student@smartcampus360.edu</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleDemoFill('FAC-001', 'Faculty')}
+                onClick={() => handleDemoFill('faculty@smartcampus360.edu', 'Faculty')}
                 className="p-2 text-left rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 transition font-medium text-slate-700"
               >
-                👨‍🏫 Faculty <span className="block text-[10px] text-slate-400">FAC-001</span>
+                👨‍🏫 Faculty <span className="block text-[10px] text-slate-400">faculty@smartcampus360.edu</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleDemoFill('TECH-001', 'Technician')}
+                onClick={() => handleDemoFill('technician@smartcampus360.edu', 'Technician')}
                 className="p-2 text-left rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 transition font-medium text-slate-700"
               >
-                🔧 Technician <span className="block text-[10px] text-slate-400">TECH-001</span>
+                🔧 Technician <span className="block text-[10px] text-slate-400">technician@smartcampus360.edu</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleDemoFill('ADM-001', 'Admin')}
+                onClick={() => handleDemoFill('admin@smartcampus360.edu', 'Admin')}
                 className="p-2 text-left rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition font-medium text-slate-700"
               >
-                🛡️ Admin <span className="block text-[10px] text-slate-400">ADM-001</span>
+                🛡️ Admin <span className="block text-[10px] text-slate-400">admin@smartcampus360.edu</span>
               </button>
             </div>
             <button
               type="button"
-              onClick={() => handleDemoFill('SA-001', 'Superadmin')}
+              onClick={() => handleDemoFill('superadmin@smartcampus360.edu', 'Superadmin')}
               className="mt-2 w-full p-2 text-center rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-100 transition text-xs font-semibold text-purple-800"
             >
-              ⚡ Superadmin Demo Account (SA-001)
+              ⚡ Superadmin Demo Account (superadmin@smartcampus360.edu)
             </button>
           </div>
 

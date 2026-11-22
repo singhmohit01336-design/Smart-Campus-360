@@ -1,6 +1,10 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 import pytest
 from app.core.security import create_access_token
+from app.models.category import Category
+from app.models.department import Department
+from app.models.ticket import Ticket, TicketPriority, TicketStatus
 from app.models.user import User, UserRole
 from app.services.analytics_service import compute_campus_analytics
 
@@ -83,3 +87,73 @@ def test_empty_database_analytics_handling(db_session):
     assert result.tickets_by_department == []
     assert result.tickets_by_category == []
     assert result.ticket_trends_daily == []
+
+
+def test_analytics_with_resolved_tickets_and_decimal_duration(
+    client, analytics_test_context, db_session
+):
+    """
+    Regression test for Bug 1:
+    PostgreSQL returns Decimal for extract('epoch', ...).
+    Verifies that compute_campus_analytics correctly calculates avg_resolution_hours as float
+    without throwing TypeError when resolved tickets exist.
+    """
+    ctx = analytics_test_context
+    uid = uuid.uuid4().hex[:6]
+
+    dept = Department(
+        department_name=f"Analytics Dept {uid}",
+        department_code=f"AN_{uid.upper()}",
+        is_active=True,
+    )
+    db_session.add(dept)
+    db_session.flush()
+
+    cat = Category(
+        category_name=f"Analytics Cat {uid}",
+        department_id=dept.id,
+        is_active=True,
+    )
+    db_session.add(cat)
+    db_session.flush()
+
+    now = datetime.now(timezone.utc)
+    t_created = now - timedelta(hours=3, minutes=30)
+    t_resolved = now - timedelta(minutes=30)
+
+    ticket = Ticket(
+        ticket_number=f"TCK-ANL-{uid}",
+        title=f"Resolved ticket for analytics test {uid}",
+        description="Testing resolution duration calculation",
+        category_id=cat.id,
+        department_id=dept.id,
+        created_by_id=ctx["student"].id,
+        location="Lab Test",
+        status=TicketStatus.RESOLVED.value,
+        priority=TicketPriority.HIGH.value,
+        created_at=t_created,
+        resolved_at=t_resolved,
+        sla_deadline=now + timedelta(hours=10),
+    )
+    db_session.add(ticket)
+    db_session.commit()
+
+    try:
+        response = client.get("/analytics/summary", headers=ctx["h_admin"])
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["resolved_tickets"] >= 1
+        assert data["avg_resolution_hours"] > 0.0
+        assert isinstance(data["avg_resolution_hours"], float)
+    finally:
+        t_obj = db_session.get(Ticket, ticket.id)
+        if t_obj:
+            db_session.delete(t_obj)
+        c_obj = db_session.get(Category, cat.id)
+        if c_obj:
+            db_session.delete(c_obj)
+        d_obj = db_session.get(Department, dept.id)
+        if d_obj:
+            db_session.delete(d_obj)
+        db_session.commit()

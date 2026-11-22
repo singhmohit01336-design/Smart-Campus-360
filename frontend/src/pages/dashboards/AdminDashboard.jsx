@@ -55,7 +55,7 @@ const AdminDashboard = ({ user }) => {
     setAssignLoading(true);
     try {
       await api.patch(`/tickets/${ticketId}/assign`, {
-        assigned_to_id: parseInt(selectedTechId, 10),
+        technician_id: parseInt(selectedTechId, 10),
       });
       setAssigningTicketId(null);
       setSelectedTechId('');
@@ -69,8 +69,10 @@ const AdminDashboard = ({ user }) => {
 
   const handleTriggerSlaCheck = async () => {
     try {
-      const res = await api.post('/sla/check-deadlines');
-      setSlaCheckMessage(res.data.message || 'SLA sweep executed successfully');
+      const res = await api.post('/sla/check');
+      const evaluated = res.data.evaluated_tickets ?? 0;
+      const overdue = res.data.overdue_detected ?? 0;
+      setSlaCheckMessage(`SLA check complete: ${evaluated} tickets evaluated, ${overdue} overdue detected.`);
       await fetchAdminData();
       setTimeout(() => setSlaCheckMessage(''), 4000);
     } catch (err) {
@@ -126,7 +128,7 @@ const AdminDashboard = ({ user }) => {
       )}
 
       {/* SLA Alert banner if overdue tickets exist */}
-      {slaStats?.overdue_count > 0 && (
+      {(slaStats?.overdue_tickets ?? slaStats?.overdue_count ?? 0) > 0 && (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 animate-pulse">
@@ -134,7 +136,7 @@ const AdminDashboard = ({ user }) => {
             </div>
             <div>
               <h4 className="text-sm font-bold text-rose-900">
-                {slaStats.overdue_count} Overdue Campus Complaint(s) Detected
+                {slaStats?.overdue_tickets ?? slaStats?.overdue_count ?? 0} Overdue Campus Complaint(s) Detected
               </h4>
               <p className="text-xs text-rose-700">
                 Tickets have breached SLA response thresholds. Immediate technician intervention required.
@@ -171,7 +173,11 @@ const AdminDashboard = ({ user }) => {
             </div>
           </div>
           <p className="text-2xl font-black text-emerald-600">
-            {slaStats?.sla_compliance_rate_pct != null ? `${slaStats.sla_compliance_rate_pct}%` : '100%'}
+            {slaStats?.sla_compliance_rate != null
+              ? `${slaStats.sla_compliance_rate}%`
+              : slaStats?.sla_compliance_rate_pct != null
+              ? `${slaStats.sla_compliance_rate_pct}%`
+              : '100%'}
           </p>
           <span className="text-[11px] text-slate-500 mt-1 block">Resolved within SLA targets</span>
         </div>
@@ -183,7 +189,9 @@ const AdminDashboard = ({ user }) => {
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-rose-600">{slaStats?.overdue_count ?? 0}</p>
+          <p className="text-2xl font-black text-rose-600">
+            {slaStats?.overdue_tickets ?? slaStats?.overdue_count ?? 0}
+          </p>
           <span className="text-[11px] text-slate-500 mt-1 block">Tickets past deadline</span>
         </div>
 

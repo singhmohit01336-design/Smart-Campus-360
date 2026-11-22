@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user, require_roles
@@ -42,11 +42,14 @@ router = APIRouter(
 def create_ticket(
     ticket_in: TicketCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(
+        require_roles([UserRole.STUDENT, UserRole.FACULTY, UserRole.ADMIN, UserRole.SUPERADMIN])
+    ),
 ):
     """
     Create a new complaint/service ticket.
     Accessible to authenticated Students, Faculty, Admins, and Superadmins.
+    Technicians are restricted from creating tickets.
     """
     # 1. Validate department
     dept = db.get(Department, ticket_in.department_id)
@@ -179,9 +182,19 @@ def list_tickets(
     # Pagination and sorting
     total_pages = max(1, math.ceil(total / page_size))
     offset = (page - 1) * page_size
-    query = query.order_by(Ticket.created_at.desc()).offset(offset).limit(page_size)
+    query = (
+        query.options(
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+            joinedload(Ticket.category),
+            joinedload(Ticket.department),
+        )
+        .order_by(Ticket.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
 
-    tickets = db.scalars(query).all()
+    tickets = db.scalars(query).unique().all()
     items = [to_ticket_response(t) for t in tickets]
 
     return PaginatedTicketsResponse(
@@ -206,7 +219,16 @@ def get_ticket_details(
     Retrieve single ticket details.
     Enforces authorization check based on user role and assignment.
     """
-    ticket = db.get(Ticket, ticket_id)
+    ticket = db.scalar(
+        select(Ticket)
+        .options(
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+            joinedload(Ticket.category),
+            joinedload(Ticket.department),
+        )
+        .where(Ticket.id == ticket_id)
+    )
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -231,7 +253,16 @@ def assign_ticket(
     Assign a ticket to an active technician.
     Restricted to Admins and Superadmins.
     """
-    ticket = db.get(Ticket, ticket_id)
+    ticket = db.scalar(
+        select(Ticket)
+        .options(
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+            joinedload(Ticket.category),
+            joinedload(Ticket.department),
+        )
+        .where(Ticket.id == ticket_id)
+    )
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -299,7 +330,16 @@ def update_ticket_status(
     Update ticket workflow status with validation and history logging.
     Enforces role-based status lifecycle constraints.
     """
-    ticket = db.get(Ticket, ticket_id)
+    ticket = db.scalar(
+        select(Ticket)
+        .options(
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+            joinedload(Ticket.category),
+            joinedload(Ticket.department),
+        )
+        .where(Ticket.id == ticket_id)
+    )
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -347,7 +387,16 @@ def get_ticket_history(
     Retrieve chronological audit history for a ticket.
     Access is restricted to authorized ticket stakeholders.
     """
-    ticket = db.get(Ticket, ticket_id)
+    ticket = db.scalar(
+        select(Ticket)
+        .options(
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+            joinedload(Ticket.category),
+            joinedload(Ticket.department),
+        )
+        .where(Ticket.id == ticket_id)
+    )
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -358,6 +407,7 @@ def get_ticket_history(
 
     history_records = db.scalars(
         select(TicketHistory)
+        .options(joinedload(TicketHistory.changed_by))
         .where(TicketHistory.ticket_id == ticket_id)
         .order_by(TicketHistory.created_at.asc())
     ).all()

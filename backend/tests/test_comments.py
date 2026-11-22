@@ -42,6 +42,13 @@ def comment_test_context(db_session):
         role=UserRole.STUDENT.value,
         is_active=True,
     )
+    faculty = User(
+        full_name=f"Faculty Professor {uid}",
+        email=f"comment_faculty_{uid}@example.com",
+        hashed_password="hash",
+        role=UserRole.FACULTY.value,
+        is_active=True,
+    )
     technician = User(
         full_name=f"Technician Responder {uid}",
         email=f"comment_tech_{uid}@example.com",
@@ -56,7 +63,7 @@ def comment_test_context(db_session):
         role=UserRole.ADMIN.value,
         is_active=True,
     )
-    db_session.add_all([student, other_student, technician, admin])
+    db_session.add_all([student, other_student, faculty, technician, admin])
     db_session.commit()
 
     ticket = Ticket(
@@ -81,11 +88,13 @@ def comment_test_context(db_session):
         "cat": cat,
         "student": student,
         "other_student": other_student,
+        "faculty": faculty,
         "technician": technician,
         "admin": admin,
         "ticket": ticket,
         "h_student": token_for(student),
         "h_other_student": token_for(other_student),
+        "h_faculty": token_for(faculty),
         "h_tech": token_for(technician),
         "h_admin": token_for(admin),
     }
@@ -98,7 +107,7 @@ def comment_test_context(db_session):
         db_session.delete(t)
     db_session.commit()
 
-    for u in [student, other_student, technician, admin]:
+    for u in [student, other_student, faculty, technician, admin]:
         user_obj = db_session.get(User, u.id)
         if user_obj:
             db_session.delete(user_obj)
@@ -192,3 +201,82 @@ def test_unauthorized_user_cannot_access_comments(client, comment_test_context):
         json={"comment": "Unauthorized comment"},
         headers=ctx["h_other_student"],
     ).status_code == 403
+
+
+def test_faculty_internal_notes_isolation(client, comment_test_context, db_session):
+    """
+    Security verification:
+    1. Faculty member cannot create internal notes (must return 403 Forbidden).
+    2. Faculty member who created a ticket cannot view internal notes added by technicians/admins.
+    """
+    ctx = comment_test_context
+    uid = uuid.uuid4().hex[:6]
+
+    # Create a ticket authored by the faculty member
+    faculty_ticket = Ticket(
+        ticket_number=f"TCK-FAC-{uid}",
+        title="Projector bulb replacement in CS Lab 3",
+        description="Bulb is flickering during lectures.",
+        category_id=ctx["cat"].id,
+        department_id=ctx["dept"].id,
+        created_by_id=ctx["faculty"].id,
+        assigned_to_id=ctx["technician"].id,
+        location="CS Lab 3",
+    )
+    db_session.add(faculty_ticket)
+    db_session.commit()
+
+    try:
+        # 1. Faculty member attempts to post an internal note -> 403 Forbidden
+        resp_post = client.post(
+            f"/tickets/{faculty_ticket.id}/comments/",
+            json={"comment": "Attempting to post internal faculty note", "is_internal": True},
+            headers=ctx["h_faculty"],
+        )
+        assert resp_post.status_code == 403
+        assert "internal staff notes" in resp_post.json()["detail"].lower()
+
+        # 2. Faculty member posts a public comment -> 201 Created
+        resp_pub = client.post(
+            f"/tickets/{faculty_ticket.id}/comments/",
+            json={"comment": "Class starts at 10 AM tomorrow.", "is_internal": False},
+            headers=ctx["h_faculty"],
+        )
+        assert resp_pub.status_code == 201
+        assert resp_pub.json()["is_internal"] is False
+
+        # 3. Technician posts an internal staff note -> 201 Created
+        resp_tech_internal = client.post(
+            f"/tickets/{faculty_ticket.id}/comments/",
+            json={"comment": "Spare bulb ordered from vendor inventory.", "is_internal": True},
+            headers=ctx["h_tech"],
+        )
+        assert resp_tech_internal.status_code == 201
+
+        # 4. Faculty fetches comments on their ticket -> must NOT see the technician's internal note
+        resp_get = client.get(
+            f"/tickets/{faculty_ticket.id}/comments/",
+            headers=ctx["h_faculty"],
+        )
+        assert resp_get.status_code == 200
+        comments = resp_get.json()
+        assert len(comments) == 1
+        assert comments[0]["is_internal"] is False
+        assert "Class starts at 10 AM tomorrow." in comments[0]["comment"]
+        assert not any(c.get("is_internal") is True for c in comments)
+        assert not any("Spare bulb" in c.get("comment", "") for c in comments)
+
+        # 5. Technician and Admin fetch comments -> CAN see internal note
+        resp_tech_get = client.get(
+            f"/tickets/{faculty_ticket.id}/comments/",
+            headers=ctx["h_tech"],
+        )
+        assert resp_tech_get.status_code == 200
+        tech_comments = resp_tech_get.json()
+        assert len(tech_comments) == 2
+        assert any(c.get("is_internal") is True for c in tech_comments)
+    finally:
+        t = db_session.get(Ticket, faculty_ticket.id)
+        if t:
+            db_session.delete(t)
+        db_session.commit()

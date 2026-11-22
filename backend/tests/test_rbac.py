@@ -11,35 +11,35 @@ from app.models.department import Department
 
 
 # Setup test router with role-guarded endpoints
-test_router = APIRouter(prefix="/test-rbac", tags=["RBAC-Test"])
+rbac_test_router = APIRouter(prefix="/test-rbac", tags=["RBAC-Test"])
 
 
-@test_router.get("/student-only")
+@rbac_test_router.get("/student-only")
 def student_route(user: User = Depends(require_roles([UserRole.STUDENT]))):
     return {"message": "student access granted", "role": user.role}
 
 
-@test_router.get("/faculty-only")
+@rbac_test_router.get("/faculty-only")
 def faculty_route(user: User = Depends(require_roles([UserRole.FACULTY]))):
     return {"message": "faculty access granted", "role": user.role}
 
 
-@test_router.get("/technician-only")
+@rbac_test_router.get("/technician-only")
 def technician_route(user: User = Depends(require_roles([UserRole.TECHNICIAN]))):
     return {"message": "technician access granted", "role": user.role}
 
 
-@test_router.get("/admin-only")
+@rbac_test_router.get("/admin-only")
 def admin_route(user: User = Depends(require_roles([UserRole.ADMIN]))):
     return {"message": "admin access granted", "role": user.role}
 
 
-@test_router.get("/superadmin-only")
+@rbac_test_router.get("/superadmin-only")
 def superadmin_route(user: User = Depends(require_roles([UserRole.SUPERADMIN]))):
     return {"message": "superadmin access granted", "role": user.role}
 
 
-@test_router.get("/staff-only")
+@rbac_test_router.get("/staff-only")
 def staff_route(
     user: User = Depends(require_roles([UserRole.ADMIN, UserRole.TECHNICIAN]))
 ):
@@ -50,7 +50,7 @@ def staff_route(
 @pytest.fixture(autouse=True, scope="module")
 def register_rbac_test_routes():
     from app.main import app
-    app.include_router(test_router)
+    app.include_router(rbac_test_router)
 
 
 def test_user_role_enum_values():

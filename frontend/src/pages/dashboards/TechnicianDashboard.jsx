@@ -50,7 +50,7 @@ const TechnicianDashboard = ({ user }) => {
     try {
       await api.patch(`/tickets/${ticketId}/status`, {
         status: nextStatus,
-        resolution_notes: notes || undefined,
+        remarks: notes || undefined,
       });
       setResolvingTicketId(null);
       setResolutionNotes('');

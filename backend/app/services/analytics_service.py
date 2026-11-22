@@ -74,7 +74,11 @@ def compute_campus_analytics(
     if base_filters:
         avg_sec_query = avg_sec_query.where(*base_filters)
     avg_seconds = db.scalar(avg_sec_query)
-    avg_resolution_hours = round((avg_seconds / 3600.0), 2) if avg_seconds is not None else 0.0
+    avg_resolution_hours = (
+        round(float(avg_seconds) / 3600.0, 2)
+        if avg_seconds is not None
+        else 0.0
+    )
 
     # 4. Overdue Tickets Count (Unresolved tickets past SLA deadline)
     overdue_query = select(func.count(Ticket.id)).where(

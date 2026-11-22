@@ -37,6 +37,16 @@ def test_resolve_qr_location_success(client, qr_test_context):
     assert data["department_name"] == "Information Technology"
 
 
+def test_list_campus_locations(client, qr_test_context):
+    ctx = qr_test_context
+    response = client.get("/qr/locations", headers=ctx["headers"])
+    assert response.status_code == 200
+    locations = response.json()
+    assert isinstance(locations, list)
+    assert len(locations) >= 1
+    assert any(loc["qr_code_identifier"] == "QR-TECH-LAB101" for loc in locations)
+
+
 def test_resolve_invalid_qr_location(client, qr_test_context):
     ctx = qr_test_context
     response = client.get("/qr/INVALID-QR-CODE-999", headers=ctx["headers"])
