@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
+from app.api.tickets import router as tickets_router
+from app.api.comments import router as comments_router
+from app.api.attachments import router as attachments_router
 from app.core.config import settings
 
 
@@ -34,4 +37,8 @@ def health_check():
     return {"status": "healthy"}
 
 
+# Register API Routers
 app.include_router(auth_router)
+app.include_router(tickets_router)
+app.include_router(comments_router)
+app.include_router(attachments_router)

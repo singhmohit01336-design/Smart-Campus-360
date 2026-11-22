@@ -26,5 +26,11 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
+    @property
+    def upload_path(self) -> Path:
+        path = BASE_DIR / self.UPLOAD_DIR
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 settings = Settings()
