@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,7 +9,7 @@ from app.core.security import (
     verify_password,
     create_access_token,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import (
     UserCreate,
     UserLogin,
@@ -44,11 +43,13 @@ def register(
             detail="Email already registered",
         )
 
+    # Public registration is strictly restricted to student role
     new_user = User(
         full_name=user_data.full_name,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
-        role="student",
+        role=UserRole.STUDENT.value,
+        phone_number=user_data.phone_number,
     )
 
     db.add(new_user)
